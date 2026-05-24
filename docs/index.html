@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shader Gallery — Jennipher Troup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #060a14; color: #e0e8ff; font-family: system-ui, sans-serif; min-height: 100vh; }
+    header { text-align: center; padding: 4rem 1rem 2rem; }
+    header h1 { font-size: clamp(2rem, 6vw, 3.5rem); font-weight: 800; background: linear-gradient(135deg, #7af, #f7a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    header p { color: #8090b0; margin-top: 0.5rem; font-size: 1.05rem; }
+    canvas { display: block; width: 100%; height: 300px; }
+    .hero-canvas { width: 100%; height: 60vh; display: block; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; max-width: 1100px; margin: 3rem auto; padding: 0 1.5rem; }
+    .card { background: #0d1525; border-radius: 16px; overflow: hidden; border: 1px solid #1a2540; transition: transform 0.2s, border-color 0.2s; }
+    .card:hover { transform: translateY(-4px); border-color: #4af; }
+    .card-canvas { width: 100%; height: 160px; display: block; background: #060a14; }
+    .card-body { padding: 1.25rem; }
+    .card-body h2 { font-size: 1rem; color: #7af; margin-bottom: 0.4rem; }
+    .card-body p { font-size: 0.85rem; color: #6070a0; line-height: 1.5; }
+    .badge { display: inline-block; background: #1a2540; color: #7af; font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: 50px; margin-top: 0.5rem; margin-right: 0.3rem; }
+    footer { text-align: center; padding: 3rem 1rem; color: #4050a0; font-size: 0.85rem; }
+    footer a { color: #7af; text-decoration: none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🌌 Shader Gallery</h1>
+  <p>Interactive GLSL art · Live WebGL · by Jennipher Troup</p>
+</header>
+
+<canvas class="hero-canvas" id="hero"></canvas>
+
+<div class="grid">
+  <div class="card"><canvas class="card-canvas" id="c1"></canvas><div class="card-body"><h2>Aurora</h2><p>Soft ribbons of northern light rendered with domain warping and fractional Brownian motion.</p><span class="badge">fbm</span><span class="badge">domain warp</span></div></div>
+  <div class="card"><canvas class="card-canvas" id="c2"></canvas><div class="card-body"><h2>Mandala</h2><p>Sacred geometry through polar coordinate mirroring and radial symmetry.</p><span class="badge">polar</span><span class="badge">symmetry</span></div></div>
+  <div class="card"><canvas class="card-canvas" id="c3"></canvas><div class="card-body"><h2>Fluid Psychedelic</h2><p>Lava-lamp blobs and cycling palette — smooth SDF organic forms.</p><span class="badge">SDF</span><span class="badge">palette</span></div></div>
+  <div class="card"><canvas class="card-canvas" id="c4"></canvas><div class="card-body"><h2>Stained Glass</h2><p>Cathedral jewel tones with Voronoi cell structure and glowing edges.</p><span class="badge">Voronoi</span><span class="badge">edge glow</span></div></div>
+</div>
+
+<footer><a href="https://github.com/qt314wink/shader-gallery">GitHub</a> &middot; <a href="https://github.com/qt314wink">Jennipher Troup</a> &middot; MIT</footer>
+
+<script>
+function initShader(canvas, fragSrc) {
+  const gl = canvas.getContext('webgl');
+  if (!gl) return;
+  canvas.width = canvas.offsetWidth * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+  const vert = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vert, `attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`);
+  gl.compileShader(vert);
+  const frag = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(frag, fragSrc);
+  gl.compileShader(frag);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vert); gl.attachShader(prog, frag); gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_res');
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  let t = 0;
+  function draw() { t += 0.016; gl.uniform1f(uTime, t); gl.drawArrays(gl.TRIANGLE_STRIP,0,4); requestAnimationFrame(draw); }
+  draw();
+}
+
+// Aurora shader
+const auroraFrag = `precision mediump float;
+uniform float u_time; uniform vec2 u_res;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.;a*=.5;}return v;}
+void main(){
+  vec2 uv=(gl_FragCoord.xy/u_res)*2.-1.;
+  uv.x*=u_res.x/u_res.y;
+  float t=u_time*.3;
+  vec2 q=vec2(fbm(uv+t),fbm(uv+vec2(1.7,9.2)+t*.8));
+  float f=fbm(uv+3.*q);
+  vec3 col=mix(vec3(.0,.02,.08),mix(vec3(.1,.8,.4),vec3(.0,.3,.9),f),f*1.2);
+  col=mix(col,vec3(.8,.2,.9),clamp(f*f*2.-1.,0.,1.));
+  gl_FragColor=vec4(col,1.);
+}`;
+
+// Mandala shader
+const mandalaFrag = `precision mediump float;
+uniform float u_time; uniform vec2 u_res;
+void main(){
+  vec2 uv=(gl_FragCoord.xy/u_res-.5)*3.;
+  uv.x*=u_res.x/u_res.y;
+  float a=atan(uv.y,uv.x);
+  float r=length(uv);
+  float sym=8.;
+  float a2=mod(a,6.2832/sym);
+  a2=abs(a2-3.1416/sym);
+  vec2 q=vec2(cos(a2),sin(a2))*r;
+  float f=sin(q.x*8.+u_time)*sin(q.y*8.-u_time*.7);
+  f+=sin(r*12.-u_time*1.5)*.5;
+  vec3 col=.5+.5*cos(vec3(0,1,2)+f*3.+u_time*.5);
+  col*=smoothstep(1.6,1.4,r);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+// Fluid psychedelic shader
+const fluidFrag = `precision mediump float;
+uniform float u_time; uniform vec2 u_res;
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+float blob(vec2 p,vec2 c,float r){return length(p-c)-r;}
+void main(){
+  vec2 uv=(gl_FragCoord.xy/u_res-.5)*3.;
+  uv.x*=u_res.x/u_res.y;
+  float t=u_time*.5;
+  vec2 b1=vec2(sin(t)*.7,cos(t*.7)*.5);
+  vec2 b2=vec2(cos(t*.8)*.6,sin(t*1.1)*.6);
+  vec2 b3=vec2(sin(t*1.3+1.)*.5,cos(t*.9+2.)*.4);
+  float d=smin(smin(blob(uv,b1,.5),blob(uv,b2,.45),.3),blob(uv,b3,.4),.3);
+  float f=smoothstep(.02,-.02,d);
+  float hue=atan(uv.y,uv.x)/(3.14159*2.)+t*.2;
+  vec3 col=.5+.5*cos(vec3(0,2,4)+hue*6.28+t);
+  gl_FragColor=vec4(col*f+vec3(.02,.01,.05)*(1.-f),1.);
+}`;
+
+// Stained glass / voronoi shader
+const stainedFrag = `precision mediump float;
+uniform float u_time; uniform vec2 u_res;
+vec2 hash2(vec2 p){return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5);}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_res*4.;
+  uv.x*=u_res.x/u_res.y;
+  vec2 p=floor(uv),f=fract(uv);
+  float minD=8.;vec2 minC=vec2(0);
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+    vec2 nb=vec2(float(i),float(j));
+    vec2 c=hash2(p+nb)+.5*sin(u_time*.5+hash2(p+nb)*6.28);
+    float d=length(nb+c-f);
+    if(d<minD){minD=d;minC=p+nb+c;}
+  }
+  float edge=smoothstep(.05,.08,minD);
+  vec3 col=.5+.5*cos(vec3(0,2,4)+minC.x*.8+minC.y*.5+u_time*.2);
+  col*=edge;
+  col+=vec3(1.,.9,.7)*(1.-edge)*smoothstep(.02,.0,minD);
+  gl_FragColor=vec4(col,1.);
+}`;
+
+[['hero', auroraFrag],['c1',auroraFrag],['c2',mandalaFrag],['c3',fluidFrag],['c4',stainedFrag]].forEach(([id,src])=>{
+  const c=document.getElementById(id);
+  if(c) initShader(c,src);
+});
+</script>
+</body>
+</html>
